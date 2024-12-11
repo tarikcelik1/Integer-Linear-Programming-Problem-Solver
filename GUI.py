@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 from functools import partial
-from a import simplex, branch_and_bound
+from a import simplex, branch_and_bound,primal_to_dual, gomory_cuts
 
 
 
@@ -12,7 +12,7 @@ def show_error(msg):
     ttk.Label(results_frame, text="Error:", font=('Arial', 12, 'bold'), foreground="red").grid(row=0, column=0, sticky="w")
     ttk.Label(results_frame, text=msg, font=('Arial', 11)).grid(row=1, column=0, sticky="w")
 
-def show_results(lp_solution, ilp_solution):
+def show_results(lp_solution, ilp_solution, ilp_solutiongc):
     # Clear previous results
     for widget in results_frame.winfo_children():
         widget.destroy()
@@ -20,16 +20,9 @@ def show_results(lp_solution, ilp_solution):
     ttk.Label(results_frame, text="Results", font=('Arial', 14, 'bold')).grid(row=0, column=0, sticky="w", pady=(10, 5))
     ttk.Label(results_frame, text=lp_solution, font=('Arial', 12)).grid(row=1, column=0, sticky="w", padx=10, pady=5)
     ttk.Label(results_frame, text=ilp_solution, font=('Arial', 12)).grid(row=2, column=0, sticky="w", padx=10, pady=5)
+    ttk.Label(results_frame, text=ilp_solutiongc, font=('Arial', 12)).grid(row=3, column=0, sticky="w", padx=10, pady=5)
 
-def convert_to_maximization(c, problem_type):
-    """
-    Converts a minimization problem to a maximization problem by negating
-    the coefficients of the objective function.
-    """
-    if problem_type.lower() == "minimization":
-        print("******************************Converting to maximization****************************")
-        return [-ci for ci in c]  # Negate coefficients for maximization
-    return c  # No change for maximization problems
+
 
 
 def solve_problem():
@@ -131,8 +124,8 @@ def process_inputs(num_vars, num_constraints, obj_entries, constraint_entries, s
             rhs_num = float(rhs_val)
             sense = senses[i].get()
             if sense == ">=":
-                row_coefs = [-coef for coef in row_coefs]
-                rhs_num = -rhs_num
+                row_coefs = [coef for coef in row_coefs]
+                rhs_num = rhs_num
             elif sense == "=":
                 pass
             A.append(row_coefs)
@@ -140,17 +133,21 @@ def process_inputs(num_vars, num_constraints, obj_entries, constraint_entries, s
         print("A:",A)
         print("b:",b)
 
-        c = convert_to_maximization(c, problem_type.lower())
+        if problem_type == "Minimization":
+            A,b,c = primal_to_dual(A,b,c)
         #Multiply c by -1 for simplex
         c = [-ci for ci in c]
         print(c)
         solution, obj_value = simplex(c, A, b)
         lp_solution = f"Simplex Solution: {solution}, Optimal Value: {obj_value}"
 
-        integer_solution, integer_obj_value = branch_and_bound(c, A, b)
-        ilp_solution = f"Branch and Bound Solution: {integer_solution}, Optimal Value: {integer_obj_value}"
+        integer_solutionbb, integer_obj_valuebb = branch_and_bound(c, A, b)
+        ilp_solutionbb = f"Branch and Bound Solution: {integer_solutionbb}, Optimal Value: {integer_obj_valuebb}"
 
-        show_results(lp_solution, ilp_solution)
+        integer_solutiongc, integer_obj_valuegc = gomory_cuts(c, A, b)
+        ilp_solutiongc = f"Gomory Cut Solution: {integer_solutiongc}, Optimal Value: {integer_obj_valuegc}"
+
+        show_results(lp_solution, ilp_solutionbb, ilp_solutiongc)
 
     except ValueError as e:
         show_error(f"Invalid input: {e}")
