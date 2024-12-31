@@ -1,9 +1,26 @@
 import tkinter as tk
 from tkinter import ttk
+from tkinter import messagebox
 from functools import partial
-from a import simplex, branch_and_bound,primal_to_dual, gomory_cuts
+from branch_and_bound_max import simplex, branch_and_bound
+from gomory import GomoryCut
 
-
+def show_help():
+    help_text = (
+        "Input Format:\n\n"
+        "Objective Function:\n"
+        "Enter coefficients of the variables (e.g., if the objective function is 3x1 + 5x2, enter 3 and 5).\n\n"
+        "Constraints:\n"
+        "For each constraint, specify the coefficients of the variables, the relation (<=, >=, =), "
+        "and the RHS value (e.g., 2x1 + 3x2 <= 10).\n\n"
+        "Example:\n"
+        "Objective Function: Maximize 3x1 + 5x2\n"
+        "Constraints:\n"
+        " 1. 2x1 + 3x2 <= 10\n"
+        " 2. x1 + x2 >= 4\n"
+        " 3. x1 = 2\n"
+    )
+    messagebox.showinfo("Input Help", help_text)
 
 def show_error(msg):
     # Instead of messageboxes, we show errors in the results frame
@@ -16,14 +33,10 @@ def show_results(lp_solution, ilp_solution, ilp_solutiongc):
     # Clear previous results
     for widget in results_frame.winfo_children():
         widget.destroy()
-
     ttk.Label(results_frame, text="Results", font=('Arial', 14, 'bold')).grid(row=0, column=0, sticky="w", pady=(10, 5))
     ttk.Label(results_frame, text=lp_solution, font=('Arial', 12)).grid(row=1, column=0, sticky="w", padx=10, pady=5)
     ttk.Label(results_frame, text=ilp_solution, font=('Arial', 12)).grid(row=2, column=0, sticky="w", padx=10, pady=5)
     ttk.Label(results_frame, text=ilp_solutiongc, font=('Arial', 12)).grid(row=3, column=0, sticky="w", padx=10, pady=5)
-
-
-
 
 def solve_problem():
     try:
@@ -36,14 +49,6 @@ def solve_problem():
         # Clear the input frame for new fields
         for widget in input_frame.winfo_children():
             widget.destroy()
-
-        # Objective Function Label
-        ttk.Label(input_frame, text="Select Problem Type:", font=('Arial', 12, 'bold')).grid(row=0, column=0, columnspan=2, pady=(10, 10), sticky="w")
-        
-        # Problem type selection
-        problem_type_var.set("Maximization")  # Default selection
-        problem_type_menu = ttk.Combobox(input_frame, textvariable=problem_type_var, values=["Maximization", "Minimization"], state="readonly", width=15)
-        problem_type_menu.grid(row=0, column=2, pady=(10, 10), sticky="w")
 
         ttk.Label(input_frame, text="Enter Coefficients for Objective Function:",
                   font=('Arial', 12, 'bold')).grid(row=1, column=0, columnspan=2, pady=(10, 10), sticky="w")
@@ -110,6 +115,7 @@ def process_inputs(num_vars, num_constraints, obj_entries, constraint_entries, s
 
         A = []
         b = []
+        constraint_type = [None] * num_constraints
         for i in range(num_constraints):
             row_coefs = []
             for entry in constraint_entries[i]:
@@ -123,6 +129,7 @@ def process_inputs(num_vars, num_constraints, obj_entries, constraint_entries, s
                 raise ValueError(f"RHS for constraint {i+1} cannot be empty.")
             rhs_num = float(rhs_val)
             sense = senses[i].get()
+            constraint_type[i] = sense
             if sense == ">=":
                 row_coefs = [coef for coef in row_coefs]
                 rhs_num = rhs_num
@@ -133,19 +140,40 @@ def process_inputs(num_vars, num_constraints, obj_entries, constraint_entries, s
         print("A:",A)
         print("b:",b)
 
-        if problem_type == "Minimization":
-            A,b,c = primal_to_dual(A,b,c)
         #Multiply c by -1 for simplex
-        c = [-ci for ci in c]
         print(c)
         solution, obj_value = simplex(c, A, b)
-        lp_solution = f"Simplex Solution: {solution}, Optimal Value: {obj_value}"
+        
 
-        integer_solutionbb, integer_obj_valuebb = branch_and_bound(c, A, b)
-        ilp_solutionbb = f"Branch and Bound Solution: {integer_solutionbb}, Optimal Value: {integer_obj_valuebb}"
+        integer_solutionbb, integer_obj_valuebb = branch_and_bound(c, A, b,constraint_type)
 
-        integer_solutiongc, integer_obj_valuegc = gomory_cuts(c, A, b)
-        ilp_solutiongc = f"Gomory Cut Solution: {integer_solutiongc}, Optimal Value: {integer_obj_valuegc}"
+        gc = GomoryCut(A, b, c,constraint_type)
+        integer_solutiongc, integer_obj_valuegc = gc.solve()
+        #take the solution with 2 digits after the decimal point
+        #convert solution to integer values
+        integer_solutiongc = [round(x, 2) for x in integer_solutiongc]
+        integer_solutiongc = [float(x) for x in integer_solutiongc]
+        integer_obj_valuegc = round(integer_obj_valuegc, 2)
+
+        lpsol = ""
+        ilpsol = ""
+        ilpsolgc = ""
+        for i in range(len(solution)):
+            if i !=0:
+                lpsol += ", "
+            lpsol += "x"+str(i+1)+"="+str(solution[i])
+        for i in range(len(integer_solutionbb)):
+            if i !=0:
+                ilpsol += ", "
+            ilpsol += "x"+str(i+1)+"="+str(integer_solutionbb[i])
+        for i in range(len(integer_solutiongc)):
+            if i !=0:
+                ilpsolgc += ", "
+            ilpsolgc += "x"+str(i+1)+"="+str(integer_solutiongc[i])
+
+        lp_solution = f"Simplex Solution: {lpsol}, Optimal Value: {obj_value}"
+        ilp_solutionbb = f"Branch and Bound Solution: {ilpsol}, Optimal Value: {integer_obj_valuebb}"
+        ilp_solutiongc = f"Gomory Cut Solution: {ilpsolgc}, Optimal Value: {integer_obj_valuegc}"
 
         show_results(lp_solution, ilp_solutionbb, ilp_solutiongc)
 
@@ -173,6 +201,8 @@ main_frame.pack(fill="both", expand=True)
 
 top_frame = ttk.Frame(main_frame)
 top_frame.pack(side="top", fill="x")
+
+ttk.Button(top_frame, text="Help", command=show_help).grid(row=0, column=5, padx=10, pady=5)
 
 ttk.Label(top_frame, text="Number of Variables:", font=('Arial', 10, 'bold')).grid(row=0, column=0, padx=5, pady=5, sticky="e")
 entry_vars = ttk.Entry(top_frame, width=5)
