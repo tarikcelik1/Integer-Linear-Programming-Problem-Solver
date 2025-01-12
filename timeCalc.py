@@ -1,48 +1,73 @@
 import time
-from branch_and_bound_max import branch_and_bound
+from branch_and_bound import branch_and_bound
+from gomory import solve_with_gomory
+import matplotlib.pyplot as plt
+import numpy as np
 
-# Initialize arrays for multiple problems
-c_array = [
-    [16, 22,12,8],          # Objective coefficients for Problem 1
-    [8000,11000,6000,4000], # Objective coefficients for Problem 2
-]
 
-A_array = [
-    [
-        [5, 7,4,3],       # Constraints for Problem 1
-    ],
-    [
-        [5000, 0,0,3000],      # Constraints for Problem 2
-        [0, 7000,0,3000],
-        [1, 1,0,0],
-        [1, 1,1,1],
-    ]
-    
-]
+def generate_problem(n, m):
+    """Generates a single problem and returns execution times for both methods."""
+    A = np.random.randint(5, 30, size=(n, m))
+    b = np.random.randint(10, 100, size=n)
+    c = np.random.randint(1, 20, size=m)
+    constraint_types = ["<="] * n
 
-b_array = [
-    [14],         # Right-hand side for Problem 1
-    [14000,1400,1,2],         # Right-hand side for Problem 2
+    # Measure Branch and Bound execution time
+    start_time_bb = time.time()
+    branch_and_bound(c, A, b, constraint_types)
+    end_time_bb = time.time()
 
-]
 
-constraint_types_array = [
-    ["<="],    # Constraint types for Problem 1
-    ["<=", "<=", "<=", "<="]  # Constraint types for Problem 2
-]
 
-start_time_array = []   
-end_time_array = []
+    return end_time_bb - start_time_bb
 
-for i in range(len(c_array)):
-    start_time_array.append(time.time())
-    best_sol, best_val = branch_and_bound(c_array[i], A_array[i], b_array[i], constraint_types_array[i])
-    end_time_array.append(time.time())
 
-    print(f"Problem {i + 1}:")
-    print("Best solution found:", best_sol)
-    print("Best objective value:", best_val)
+def test_average_time(n, num_tests=50):
+    """Tests average execution time for n variables/constraints over num_tests iterations."""
+    total_time_bb = 0
+    total_time_gom = 0
 
-# Calculate averagae time taken for all problems
-avg_time = sum(end_time_array[i] - start_time_array[i] for i in range(len(c_array))) / len(c_array)
-print("Average time taken (seconds):", avg_time)
+    for _ in range(num_tests):
+        time_bb= generate_problem(n, n)
+        total_time_bb += time_bb
+
+    avg_time_bb = (total_time_bb / num_tests) * 1e9  # Convert seconds to nanoseconds
+
+    return avg_time_bb
+
+
+def main():
+    max_problem_size = 10  # Maximum number of variables/constraints to test
+    num_tests_per_problem = 20 # Number of tests per problem size
+
+    avg_times_bb = []
+    avg_times_gom = [7177989,
+                    91698964,
+                    78182817,
+                    163012573,
+                    513077378,
+                    486239195,
+                    540265242,
+                    767060689,
+                    533826973,
+                    339983128]
+
+    for n in range(1, max_problem_size + 1):
+        avg_time_bb = test_average_time(n, num_tests_per_problem)
+        print(avg_time_bb)
+        avg_times_bb.append(avg_time_bb)
+
+    # Plotting results
+    problem_sizes = list(range(1, max_problem_size + 1))
+    plt.plot(problem_sizes, avg_times_bb, label="Branch and Bound")
+    plt.plot(problem_sizes, avg_times_gom, label="Gomory")
+    plt.xlabel('Number of variables/constraints (n x n)')
+    plt.ylabel('Average time taken (ns)')
+    plt.title('Branch and Bound vs Gomory (Average Execution Time)')
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+
+if __name__ == "__main__":
+    main()
